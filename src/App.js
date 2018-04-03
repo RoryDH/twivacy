@@ -8,7 +8,8 @@ import {
   Link
 } from 'react-router-dom';
 import Feed from './components/Feed';
-import Setup from './components/Setup';
+import Settings from './components/Settings';
+import PropsRoute from './components/PropsRoute';
 
 const routes = [
   {
@@ -18,17 +19,19 @@ const routes = [
     link_name: "Feed"
   },
   {
-    path: "/setup",
-    main: Setup,
-    link_name: "Setup"
+    path: "/settings",
+    main: Settings,
+    link_name: "Settings"
   }
 ];
+// const TwitterUserContext = React.createContext(null);
 
 class App extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      messages: [],
+      // firebase_user: null,
+      twitterUser: null,
       loading: true
     }; // <- set up react state
   }
@@ -36,41 +39,54 @@ class App extends Component {
 
   }
   componentDidMount(){
+    let component = this
     firebase.auth().onAuthStateChanged(user => {
-      this.setState({loading: false})
-      // if (user) {
-      //   this.setState({uid: user.uid});
-      // } else {
-      //   this.setState({uid: null});
-      // }
+      if (user) {
+        let uid = user.providerData[0].uid;
+        base.bindDoc(`twitter_users/${uid}`, {
+          context: component,
+          state: "twitterUser",
+          then() {
+            // component.formatUserStructure()
+            component.setState({
+              // firebase_user: user,
+              loading: false
+            })
+          },
+          onFailure(err) { }
+        });
+      } else {
+        this.setState({loading: false})
+      }
     });
-
-    // base.bindToState('messages', {
-    //   context: this,
-    //   state: 'messages',
-    //   asArray: true
-    // });
   }
   login = () => {
     let provider = new firebase.auth.TwitterAuthProvider();
     firebase.auth().signInWithPopup(provider).then(result => {
-      let user = result.user;
-      let username = result.additionalUserInfo.username;
-      let twitter_uid = user.providerData[0].uid;
-      let token = result.credential.accessToken;
-      let secret = result.credential.secret;
+      let user = result.user
+      let username = result.additionalUserInfo.username
+      let twitterUid = user.providerData[0].uid
+      let token = result.credential.accessToken
+      let secret = result.credential.secret
 
       // possibly set display name to username and index twitter_users by handle
       // user.updateProfile({ displayName: username })
 
-      base.addToCollection('twitter_users', {
+      let update_attrs = {
+        uid: twitterUid,
         username: username,
         accessToken: result.credential.accessToken,
         secret: result.credential.secret,
-      }, twitter_uid).then(() => {
-      }).catch(err => {
-      });
-    });
+      }
+
+      base.updateDoc(`twitter_users/${twitterUid}`, update_attrs).catch(e => {
+        base.addToCollection(
+          'twitter_users',
+          {...update_attrs, friendIds: [twitterUid], },
+          twitterUid
+        )
+      })
+    })
   }
   logout = async () => {
     this.setState({loading: true})
@@ -86,8 +102,8 @@ class App extends Component {
       return <h2>Loading...</h2>
     }
 
-    let user = firebase.auth().currentUser;
-    if (!user) {
+    let user = firebase.auth().currentUser
+    if (!user || !this.state.twitterUser) {
       return (
         <div>
           <h2>notloggedin</h2>
@@ -98,6 +114,7 @@ class App extends Component {
 
     return (
       <Router>
+        {/*<TwitterUserContext.Provider twitterUser={this.state.twitterUser}>*/}
         <div>
           <p>Signed in as {user.displayName}. <button onClick={this.logout}>Logout</button></p>
           <ul>
@@ -105,30 +122,24 @@ class App extends Component {
               <li key={index}><Link to={route.path}>{route.link_name}</Link></li>
             ))}
           </ul>
+          <hr />
           <div>
             {routes.map((route, index) => (
-              <Route
+              <PropsRoute
                 key={index}
                 path={route.path}
                 exact={route.exact}
+                // render={React.createElement(route.main, {twitterUser: this.state.twitterUser})}
                 component={route.main}
+                twitterUser={this.state.twitterUser}
               />
             ))}
           </div>
         </div>
+        {/*</TwitterUserContext.Provider>*/}
       </Router>
     );
-    // return (
-    //   <form onSubmit={this.addMessage.bind(this)}>
-    //     <input type="text" ref={ el => this.inputEl = el }/>
-    //     <input type="submit"/>
-    //     <ul>
-    //       { /* Render the list of messages */
-    //         this.state.messages.map( (message, id) => <li key={id}>{message}</li> )
-    //       }
-    //     </ul>
-    //   </form>
-    // );
+
   }
 }
 

@@ -1,5 +1,6 @@
 {
   "projects": {
-    "prod": "twivacy-3a746"
+    "prod": "twivacy-3a746",
+    "default": "twivacy-3a746"
   }
 }
